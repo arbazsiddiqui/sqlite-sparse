@@ -98,6 +98,9 @@ and `HF_TOKEN` is used if set.
 (indexes with torch).
 
 ```
+sqlite-sparse build <db> <file.jsonl> [--model mini]      # index {id, text[, title]} records
+sqlite-sparse search <db> "<query>" [-k 10]
+sqlite-sparse info <db>
 sqlite-sparse convert <hf-model-id> out.sprs [--double-log]
 ```
 
