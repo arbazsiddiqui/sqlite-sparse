@@ -1,0 +1,42 @@
+[project]
+name = "sqlite-sparse"
+version = "0.1.0"
+description = "Semantic search in one SQLite file. No model, no server at query time."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["numpy>=1.24"]
+
+authors = [{ name = "Arbaz Siddiqui", email = "arbaz00@gmail.com" }]
+keywords = ["sqlite", "search", "semantic-search", "sparse", "retrieval", "splade", "embedded"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Database",
+  "Topic :: Text Processing :: Indexing",
+]
+
+[project.urls]
+Homepage = "https://github.com/arbazsiddiqui/sqlite-sparse"
+Repository = "https://github.com/arbazsiddiqui/sqlite-sparse"
+Issues = "https://github.com/arbazsiddiqui/sqlite-sparse/issues"
+
+[project.optional-dependencies]
+build = ["onnxruntime>=1.17", "tokenizers>=0.15", "huggingface_hub>=0.20"]
+build-torch = ["sentence-transformers>=5.0", "torch"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+sqlite-sparse = "sqlite_sparse.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["sqlite_sparse"]
+
+[tool.setuptools.package-data]
+sqlite_sparse = ["sparse0.so", "sparse0.dylib", "sparse0.dll"]

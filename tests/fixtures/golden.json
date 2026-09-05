@@ -1,0 +1,246 @@
+{
+ "model": "mini",
+ "encoder_sha256": "60aa9ca874c73d2eaf3a1f2bff8c20c95c0d9871f803a5e70bbe187608ed325b",
+ "sidecar_sha256": "a7b195cb2aaab7c124337d71be145d65338c31a472c1f19739302001f3735659",
+ "max_seq": 512,
+ "weight_scale": 40,
+ "documents": [
+  {
+   "rowid": 1,
+   "text": "Aspirin lowers the risk of heart attack and stroke.",
+   "top_terms_u8": {
+    "as": 45,
+    "heart": 38,
+    "stroke": 37,
+    "##pi": 37,
+    "risk": 31,
+    "##rin": 31,
+    "lower": 28,
+    "reduce": 28,
+    "strokes": 27,
+    "lowers": 26,
+    "reduces": 24,
+    "risks": 23,
+    "attack": 22,
+    "benefits": 22,
+    "effects": 21,
+    "decrease": 20,
+    "heartbeat": 18,
+    "attacks": 17,
+    "lowering": 17,
+    "cardiac": 17,
+    "antibiotics": 17,
+    "reduction": 16,
+    "hearts": 16,
+    "effect": 15,
+    "dangerous": 15
+   },
+   "n_terms": 157
+  },
+  {
+   "rowid": 2,
+   "text": "Powai is a lakeside suburb of Mumbai.",
+   "top_terms_u8": {
+    "mumbai": 37,
+    "pow": 37,
+    "##ai": 36,
+    "where": 31,
+    "india": 26,
+    "lakeside": 25,
+    "bombay": 21,
+    "##i": 20,
+    "##hai": 18,
+    "##ay": 17,
+    "suburb": 16,
+    "ai": 15,
+    "city": 14,
+    "london": 14,
+    "neighborhood": 14,
+    "suburbs": 14,
+    "indian": 13,
+    "prisoners": 13,
+    "##ei": 13,
+    "##a": 12,
+    "##hi": 12,
+    "jail": 11,
+    "prisoner": 11,
+    "##tai": 11,
+    "##hay": 11
+   },
+   "n_terms": 132
+  },
+  {
+   "rowid": 3,
+   "text": "SQLite is an embedded relational database engine.",
+   "top_terms_u8": {
+    "##ite": 51,
+    "##ites": 43,
+    "sql": 39,
+    "##te": 30,
+    "##tone": 30,
+    "database": 30,
+    "embedded": 30,
+    "##lite": 28,
+    "##ine": 27,
+    "relational": 26,
+    "##itic": 25,
+    "engine": 23,
+    "databases": 22,
+    "##ide": 21,
+    "##itas": 20,
+    "##e": 19,
+    "##t": 19,
+    "stone": 19,
+    "##ate": 19,
+    "##it": 19,
+    "##are": 19,
+    "##tones": 18,
+    "##ited": 18,
+    "testify": 18,
+    "##tian": 17
+   },
+   "n_terms": 295
+  },
+  {
+   "rowid": 4,
+   "text": "The Federal Reserve raised interest rates by a quarter point.",
+   "top_terms_u8": {
+    "quarter": 41,
+    "interest": 39,
+    "point": 36,
+    "federal": 36,
+    "raised": 36,
+    "raise": 36,
+    "quarters": 36,
+    "reserve": 33,
+    "points": 31,
+    "rates": 30,
+    "raising": 30,
+    "increase": 29,
+    "reserves": 29,
+    "rate": 28,
+    "increases": 28,
+    "raises": 27,
+    "increased": 25,
+    "rise": 21,
+    "interests": 20,
+    "elevated": 19,
+    "interested": 18,
+    "fed": 17,
+    "by": 15,
+    "quadrant": 15,
+    "half": 14
+   },
+   "n_terms": 125
+  },
+  {
+   "rowid": 5,
+   "text": "How to repot a monstera without damaging the roots.",
+   "top_terms_u8": {
+    "##a": 39,
+    "monster": 38,
+    "rep": 32,
+    "how": 27,
+    "without": 27,
+    "##ot": 27,
+    "monsters": 27,
+    "damage": 25,
+    "roots": 25,
+    "root": 23,
+    "damaged": 21,
+    "creature": 18,
+    "godzilla": 17,
+    "##as": 16,
+    "plant": 16,
+    "damaging": 16,
+    "ref": 15,
+    "way": 14,
+    "##ots": 13,
+    "monstrous": 13,
+    "destroyed": 12,
+    "ways": 12,
+    "res": 12,
+    "destroy": 11,
+    "beast": 11
+   },
+   "n_terms": 123
+  }
+ ],
+ "queries": [
+  {
+   "text": "what prevents cardiac arrest",
+   "weights": {
+    "what": 2.7699,
+    "prevents": 6.7186,
+    "cardiac": 6.5334,
+    "arrest": 6.8699
+   },
+   "topk": [
+    [
+     1,
+     3.952
+    ],
+    [
+     3,
+     0.9
+    ]
+   ]
+  },
+  {
+   "text": "central bank monetary policy",
+   "weights": {
+    "central": 4.6675,
+    "bank": 5.0383,
+    "monetary": 7.4112,
+    "policy": 5.1292
+   },
+   "topk": [
+    [
+     4,
+     0.252
+    ]
+   ]
+  },
+  {
+   "text": "houseplant care",
+   "weights": {
+    "house": 4.4218,
+    "##pl": 5.1625,
+    "##ant": 5.4457,
+    "care": 4.1001
+   },
+   "topk": [
+    [
+     3,
+     0.136
+    ]
+   ]
+  },
+  {
+   "text": "embedded database",
+   "weights": {
+    "embedded": 7.3851,
+    "database": 5.7408
+   },
+   "topk": [
+    [
+     3,
+     9.844
+    ]
+   ]
+  },
+  {
+   "text": "Mumbai neighbourhood",
+   "weights": {
+    "mumbai": 8.2913,
+    "neighbourhood": 9.4164
+   },
+   "topk": [
+    [
+     2,
+     7.905
+    ]
+   ]
+  }
+ ]
+}

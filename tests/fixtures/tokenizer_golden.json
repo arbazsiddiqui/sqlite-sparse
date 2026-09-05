@@ -1,0 +1,439 @@
+{
+ "note": "Token ids from the HF tokenizer (add_special_tokens=False). Both the extension's query tokenizer and the Python reference must reproduce these exactly.",
+ "models": {
+  "mini": {
+   "hf_model": "opensearch-project/opensearch-neural-sparse-encoding-doc-v2-mini",
+   "vocab_n": 30522,
+   "cases": [
+    {
+     "text": "what prevents cardiac arrest",
+     "ids": [
+      2054,
+      16263,
+      15050,
+      6545
+     ]
+    },
+    {
+     "text": "ASPIRIN LOWERS RISK",
+     "ids": [
+      2004,
+      8197,
+      6657,
+      24950,
+      3891
+     ]
+    },
+    {
+     "text": "résumé for a café owner in São Paulo",
+     "ids": [
+      13746,
+      2005,
+      1037,
+      7668,
+      3954,
+      1999,
+      7509,
+      9094
+     ]
+    },
+    {
+     "text": "Herzinfarkt Risiko für Frauen über 60",
+     "ids": [
+      2014,
+      17168,
+      14971,
+      25509,
+      15544,
+      5332,
+      3683,
+      6519,
+      25312,
+      24997,
+      19169,
+      3438
+     ]
+    },
+    {
+     "text": "don't stop-me now!! (really) 3.14 x 2,000",
+     "ids": [
+      2123,
+      1005,
+      1056,
+      2644,
+      1011,
+      2033,
+      2085,
+      999,
+      999,
+      1006,
+      2428,
+      1007,
+      1017,
+      1012,
+      2403,
+      1060,
+      1016,
+      1010,
+      2199
+     ]
+    },
+    {
+     "text": "दिल का दौरा कैसे रोका जाए",
+     "ids": [
+      1325,
+      29877,
+      29870,
+      1315,
+      29876,
+      100,
+      1315,
+      29874,
+      1333,
+      29879,
+      29851,
+      29876,
+      1319,
+      29876,
+      29850
+     ]
+    },
+    {
+     "text": "как предотвратить остановку сердца",
+     "ids": [
+      1189,
+      10260,
+      23925,
+      1194,
+      16856,
+      15290,
+      29742,
+      14150,
+      22919,
+      25529,
+      16856,
+      10260,
+      22919,
+      10325,
+      22919,
+      23742,
+      1193,
+      29747,
+      22919,
+      28995,
+      19259,
+      23925,
+      29748,
+      1196,
+      15290,
+      16856,
+      29742,
+      29751,
+      10260
+     ]
+    },
+    {
+     "text": "كيف نمنع السكتة القلبية",
+     "ids": [
+      1293,
+      14498,
+      29833,
+      1296,
+      22192,
+      15915,
+      29830,
+      1270,
+      23673,
+      29824,
+      29835,
+      29817,
+      19433,
+      1270,
+      23673,
+      29834,
+      23673,
+      29816,
+      14498,
+      19433
+     ]
+    },
+    {
+     "text": "如何预防心脏骤停",
+     "ids": [
+      100,
+      100,
+      100,
+      100,
+      1849,
+      100,
+      100,
+      100
+     ]
+    },
+    {
+     "text": "心停止を防ぐ方法",
+     "ids": [
+      1849,
+      100,
+      1887,
+      1690,
+      100,
+      1653,
+      1863,
+      1901
+     ]
+    },
+    {
+     "text": "tab\tseparated\nlines  and   spaces",
+     "ids": [
+      21628,
+      5459,
+      3210,
+      1998,
+      7258
+     ]
+    },
+    {
+     "text": "emoji 🫀 heart and zzzqqqxxx unknownword",
+     "ids": [
+      7861,
+      29147,
+      2072,
+      100,
+      2540,
+      1998,
+      1062,
+      13213,
+      4160,
+      4160,
+      4160,
+      20348,
+      2595,
+      4242,
+      18351
+     ]
+    },
+    {
+     "text": "naïve coöperation façade",
+     "ids": [
+      15743,
+      6792,
+      8508
+     ]
+    },
+    {
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa long word then normal",
+     "ids": [
+      100,
+      2146,
+      2773,
+      2059,
+      3671
+     ]
+    }
+   ]
+  },
+  "multilingual": {
+   "hf_model": "opensearch-project/opensearch-neural-sparse-encoding-multilingual-v1",
+   "vocab_n": 105879,
+   "cases": [
+    {
+     "text": "what prevents cardiac arrest",
+     "ids": [
+      11523,
+      28856,
+      10107,
+      18579,
+      32631,
+      36298
+     ]
+    },
+    {
+     "text": "ASPIRIN LOWERS RISK",
+     "ids": [
+      23736,
+      18542,
+      10115,
+      15145,
+      10107,
+      21249
+     ]
+    },
+    {
+     "text": "résumé for a café owner in São Paulo",
+     "ids": [
+      21337,
+      10139,
+      143,
+      18427,
+      23661,
+      10104,
+      11132,
+      13585
+     ]
+    },
+    {
+     "text": "Herzinfarkt Risiko für Frauen über 60",
+     "ids": [
+      46727,
+      10262,
+      25067,
+      13132,
+      62195,
+      10325,
+      20761,
+      10859,
+      10780
+     ]
+    },
+    {
+     "text": "don't stop-me now!! (really) 3.14 x 2,000",
+     "ids": [
+      11530,
+      112,
+      162,
+      16292,
+      118,
+      10525,
+      11628,
+      106,
+      106,
+      113,
+      25165,
+      114,
+      124,
+      119,
+      10255,
+      166,
+      123,
+      117,
+      10292
+     ]
+    },
+    {
+     "text": "दिल का दौरा कैसे रोका जाए",
+     "ids": [
+      88607,
+      11263,
+      564,
+      48150,
+      10949,
+      547,
+      12114,
+      573,
+      66396,
+      10949,
+      24820,
+      18155
+     ]
+    },
+    {
+     "text": "как предотвратить остановку сердца",
+     "ids": [
+      11000,
+      19458,
+      11163,
+      65052,
+      63701,
+      59409,
+      15072,
+      10475,
+      11372,
+      90595,
+      90926
+     ]
+    },
+    {
+     "text": "كيف نمنع السكتة القلبية",
+     "ids": [
+      474,
+      19455,
+      477,
+      21095,
+      11872,
+      24177,
+      11206,
+      12570,
+      50201,
+      73032,
+      10599
+     ]
+    },
+    {
+     "text": "如何预防心脏骤停",
+     "ids": [
+      3020,
+      1847,
+      9382,
+      9122,
+      3675,
+      6999,
+      9581,
+      1978
+     ]
+    },
+    {
+     "text": "心停止を防ぐ方法",
+     "ids": [
+      3675,
+      1978,
+      4846,
+      1562,
+      9122,
+      1519,
+      4301,
+      5020
+     ]
+    },
+    {
+     "text": "tab\tseparated\nlines  and   spaces",
+     "ids": [
+      56107,
+      38487,
+      17294,
+      10110,
+      45714
+     ]
+    },
+    {
+     "text": "emoji 🫀 heart and zzzqqqxxx unknownword",
+     "ids": [
+      10252,
+      29654,
+      100,
+      13645,
+      10110,
+      168,
+      56339,
+      11561,
+      11561,
+      11561,
+      74078,
+      10661,
+      22669,
+      60961
+     ]
+    },
+    {
+     "text": "naïve coöperation façade",
+     "ids": [
+      43786,
+      10598,
+      28828,
+      33870
+     ]
+    },
+    {
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa long word then normal",
+     "ids": [
+      100,
+      11134,
+      12290,
+      11120,
+      15041
+     ]
+    }
+   ]
+  }
+ }
+}
