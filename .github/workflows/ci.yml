@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e "bindings/python[dev]"
+      - run: pytest -q
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build bindings/python
+      - run: twine check bindings/python/dist/*
+  extension:
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04 keeps the Linux binary at glibc 2.35
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Linux'
+        with:
+          python-version: "3.12"
+      - name: Install sqlite headers (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      # setup-python's macOS sqlite3 cannot load extensions; Homebrew's can
+      - name: Homebrew python (macos)
+        if: runner.os == 'macOS'
+        run: |
+          brew install python@3.12
+          echo "$(brew --prefix python@3.12)/libexec/bin" >> "$GITHUB_PATH"
+          "$(brew --prefix python@3.12)/bin/python3.12" -c "import sqlite3; assert hasattr(sqlite3.Connection, 'enable_load_extension')"
+      - name: Build sparse0
+        run: |
+          SQLITE_INC=$([ "$RUNNER_OS" = "macOS" ] && echo "$(brew --prefix sqlite)/include" || echo /usr/include)
+          cmake -B build -DSQLITE_INCLUDE_DIR="$SQLITE_INC" -DGGML_METAL=OFF -DGGML_BLAS=OFF
+          cmake --build build -j3
+      - name: Test extension against the reference implementation
+        # venv: Homebrew python is PEP 668 managed
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -c "import sqlite3; assert hasattr(sqlite3.Connection, 'enable_load_extension'), 'interpreter cannot load extensions'"
+          python -m pip install -e "bindings/python[dev]"
+          python -m pytest -q tests/test_loadable.py tests/test_encode.py -rs
+        env:
+          SQLITE_SPARSE_ENCODE_TEST: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sparse0-${{ matrix.os }}
+          path: |
+            build/sparse0.so
+            build/sparse0.dylib
+          if-no-files-found: error
