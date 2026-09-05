@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+*.db
+*.sqlite
+.DS_Store
+bindings/python/sqlite_sparse/sparse0.*

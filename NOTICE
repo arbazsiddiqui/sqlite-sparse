@@ -1,0 +1,56 @@
+sqlite-sparse
+Copyright (c) 2026 Arbaz Siddiqui. Licensed under the MIT License (see LICENSE).
+
+The retrieval architecture implemented here (inference-free learned sparse
+retrieval, with document-side neural encoding and a static query weight table)
+is the OpenSearch project's design. This repository contributes the embedded
+SQLite implementation, the file format, the reference implementation and the
+measurements, and redistributes converted copies of OpenSearch's models.
+
+Third-party work, with provenance.
+
+llama.cpp, https://github.com/ggml-org/llama.cpp, MIT License.
+  Compiled into the sparse0 extension (pinned commit in CMakeLists.txt) to run
+  the document encoder. Also used, at commit c1d0e7a004015f23bc0233470b747b596f29b264,
+  to convert the encoders below to GGUF with its convert_hf_to_gguf.py.
+
+utf8proc, https://github.com/JuliaStrings/utf8proc, MIT License (Unicode data
+  under the Unicode license). Compiled into the sparse0 extension for the query
+  tokenizer's case folding, normalization and character categories.
+
+OpenSearch neural sparse encoders, https://huggingface.co/opensearch-project,
+Apache License 2.0, by the OpenSearch project. Exact revisions converted:
+  opensearch-neural-sparse-encoding-doc-v2-mini        4af867a426867dfdd744097531046f4289a32fdd
+  opensearch-neural-sparse-encoding-doc-v3-distill     babf71f3c48695e2e53a978208e8aba48335e3c0
+  opensearch-neural-sparse-encoding-multilingual-v1    1e0f096c2b51c234f1d20725c793e1b5b6d556db
+
+  What the redistributed files under https://huggingface.co/arbazsiddiqui contain
+  and where each tensor came from.
+  <model>_f16.gguf   The BERT encoder body of the checkpoint (embeddings,
+                     attention and feed-forward layers, layer norms), converted
+                     by llama.cpp's converter to GGUF at f16. No tensor was
+                     added, removed or altered beyond the container change.
+  <model>_q8.gguf    The same, quantized to Q8_0 by llama.cpp's llama-quantize.
+                     Values change by quantization only.
+  <model>.sprs       Tensors llama.cpp's converter omits, copied from the same
+                     checkpoint without modification: the masked-LM head
+                     (cls.predictions.transform.dense weight and bias, its
+                     LayerNorm weight and bias, cls.predictions.bias), the
+                     decoder weight (the word-embedding matrix, which the head
+                     ties to), the model's static query weight table (the
+                     SparseStaticEmbedding module), and the WordPiece
+                     vocabulary from the checkpoint's tokenizer. Nothing in the
+                     sidecar was trained, generated or reconstructed by this
+                     project; the file is a serialization of existing tensors
+                     plus a small header (format version, dimensions, an
+                     activation flag that records which log1p variant the
+                     checkpoint's pooling uses). Written by
+                     bindings/python/sqlite_sparse/convert.py.
+  These files are redistributed under Apache License 2.0 with attribution to
+  the OpenSearch project. All retrieval quality belongs to the original models.
+
+Used in benchmarks only, not redistributed.
+  sqlite-vec, https://github.com/asg017/sqlite-vec, MIT or Apache License 2.0.
+  MongoDB/mdbr-leaf-ir, https://huggingface.co/MongoDB/mdbr-leaf-ir, Apache License 2.0.
+  MS MARCO passages and BEIR datasets (SciFact, NFCorpus, ArguAna, SCIDOCS,
+  FiQA-2018), under their own terms, via the mteb Hugging Face datasets.
