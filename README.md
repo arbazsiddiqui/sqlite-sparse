@@ -223,7 +223,7 @@ vocabulary.
 git clone --depth 1 https://github.com/ggml-org/llama.cpp
 python llama.cpp/convert_hf_to_gguf.py <hf-model-id> --outfile model_f16.gguf --outtype f16
 llama.cpp/build/bin/llama-quantize model_f16.gguf model_q8.gguf q8_0      # optional
-pip install "sqlite-sparse[build-torch]"
+pip install "sqlite-sparse[convert]"                                     # torch and sentence-transformers, only for this step
 sqlite-sparse convert <hf-model-id> model.sprs                            # --double-log for v3 models
 ```
 

@@ -24,8 +24,7 @@ Repository = "https://github.com/arbazsiddiqui/sqlite-sparse"
 Issues = "https://github.com/arbazsiddiqui/sqlite-sparse/issues"
 
 [project.optional-dependencies]
-build = ["onnxruntime>=1.17", "tokenizers>=0.15", "huggingface_hub>=0.20"]
-build-torch = ["sentence-transformers>=5.0", "torch"]
+convert = ["sentence-transformers>=5.0", "torch", "transformers>=4.40"]
 dev = ["pytest>=7"]
 
 [project.scripts]
