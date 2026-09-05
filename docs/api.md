@@ -32,7 +32,7 @@ The query tokenizer's output for `text` as a JSON array of token strings, using 
 vocabulary stored in this database. Useful to see what a query matched on.
 
 `sparse_version()`
-Returns `'sqlite-sparse/1 sparse0 0.1.0'`.
+Returns `'sqlite-sparse/1 sparse0 1.0.0'`.
 
 ## Virtual table
 

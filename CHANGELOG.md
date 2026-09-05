@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.1.0 (2026-09-05)
+## 1.0.0 (2026-09-05)
 
-First release.
+First release. The file format `sqlite-sparse/1` and the `.sprs` sidecar header are
+stable: files written by any 1.x release stay readable by later 1.x releases.
 
 - `sparse0` loadable SQLite extension for semantic search over a single database
   file with no model at query time. Documents are encoded in-process at INSERT

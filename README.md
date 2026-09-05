@@ -59,7 +59,7 @@ Or take the binary from the [releases page](https://github.com/arbazsiddiqui/sql
 and use it from any language.
 
 ```
-tar xzf sparse0-0.1.0-loadable-linux-x86_64.tar.gz    # or -macos-arm64
+tar xzf sparse0-1.0.0-loadable-linux-x86_64.tar.gz    # or -macos-arm64
 sqlite3 notes.db
 sqlite> .load ./sparse0
 ```
@@ -143,7 +143,7 @@ approximate index, and ties break on the lower rowid. Nothing from the GGUF or t
 sidecar is read at query time.
 
 The file layout is in [FORMAT.md](FORMAT.md). The format and the sidecar header carry
-version 1; format stability is not promised before 1.0.
+version 1, and files written by any 1.x release stay readable by later 1.x releases.
 
 ## Benchmarks
 

@@ -896,7 +896,7 @@ static void fn_sparse_tokens(sqlite3_context *ctx, int argc, sqlite3_value **arg
 
 static void fn_sparse_version(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     (void)argc; (void)argv;
-    sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 0.1.0", -1, SQLITE_STATIC);
+    sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 1.0.0", -1, SQLITE_STATIC);
 }
 
 #ifdef _WIN32

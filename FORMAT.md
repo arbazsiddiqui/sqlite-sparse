@@ -60,5 +60,5 @@ Both this file format (`format=sqlite-sparse/1` in meta) and the `.sprs` sidecar
 header carry version 1. Readers must refuse a version they do not know. Any
 change that alters how an existing file is interpreted increments the version,
 and the compatibility rules between versions will be stated here explicitly.
-Format stability is not promised before 1.0; files written by 0.x releases may
-need rebuilding.
+Files written by any 1.x release stay readable by later 1.x releases; an
+incompatible change bumps this format version and the library's major version.
