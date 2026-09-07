@@ -70,8 +70,9 @@ sqlite3 notes.db
 sqlite> .load ./sparse0
 ```
 
-Keep the filename `sparse0.so` / `sparse0.dylib`, since SQLite derives the entry point
-from it. On macOS the python.org `sqlite3` module cannot load extensions; use Homebrew or
+A query-only WebAssembly build, SQLite compiled to WASM with `sparse0` inside, is in
+[`wasm/`](https://github.com/arbazsiddiqui/sqlite-sparse/blob/master/wasm/): it searches and writes indexes in the browser but has no encoder. Keep the
+filename `sparse0.so` / `sparse0.dylib`, since SQLite derives the entry point from it. On macOS the python.org `sqlite3` module cannot load extensions; use Homebrew or
 conda Python, or `pip install sqlean.py` and `import sqlean as sqlite3`.
 
 ## Quickstart

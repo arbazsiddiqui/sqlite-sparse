@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8"><title>sparse0 wasm check</title>
+<style>body{font:15px/1.4 system-ui;margin:2rem;max-width:60rem}pre{background:#f4f4f6;padding:.8rem;overflow:auto}</style>
+<h1>sparse0 in SQLite WebAssembly</h1>
+<p>Loads <code>dist/sqlite3.mjs</code>, checks the extension is compiled in, refuses <code>sparse_register</code>,
+writes a small index from term vectors and searches it. Drop a sqlite-sparse <code>.db</code> below to run a query against it.</p>
+<pre id="out">running…</pre>
+<input type="file" id="db" accept=".db,.sqlite"> <input id="q" value="heart medication" size="40"> <button id="run">MATCH</button>
+<pre id="res"></pre>
+<script type="module">
+import init from "./dist/sqlite3.mjs";
+const out = document.getElementById("out"), res = document.getElementById("res");
+const lines = [];
+const say = (s) => { lines.push(s); out.textContent = lines.join("\n"); };
+const sqlite3 = await init({ print: () => {}, printErr: () => {} });
+say("sparse_version: " + new sqlite3.oo1.DB(":memory:").selectValue("SELECT sparse_version()"));
+const w = new sqlite3.oo1.DB(":memory:");
+try { w.exec("SELECT sparse_register('mini', 'a.gguf', 'a.sprs')"); say("FAIL: sparse_register accepted"); }
+catch (e) { say("sparse_register refused: " + e.message); }
+w.exec(`CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT);
+INSERT INTO meta VALUES ('format','sqlite-sparse/1'),('model_id','external'),('weight_mode','u8'),('weight_scale','40.0'),('ndocs','0'),('vocab','["heart","attack","mumbai"]');
+CREATE TABLE qlut(t INTEGER PRIMARY KEY, w REAL); CREATE TABLE postings(t INTEGER PRIMARY KEY, docs BLOB, ws BLOB);
+CREATE TABLE docs(id INTEGER PRIMARY KEY AUTOINCREMENT, ext_id TEXT UNIQUE, title TEXT, body TEXT, meta TEXT, deleted INTEGER DEFAULT 0, ntokens INTEGER, truncated INTEGER);
+CREATE TABLE pending(id INTEGER PRIMARY KEY AUTOINCREMENT, ext_id TEXT, title TEXT, body TEXT NOT NULL);
+CREATE VIRTUAL TABLE t USING sparse0();
+INSERT INTO t(rowid, terms) VALUES (1, '{"heart": 2.0, "attack": 1.5}');
+INSERT INTO t(rowid, terms) VALUES (2, '{"mumbai": 3.0}');`);
+const got = JSON.stringify(w.selectArrays("SELECT rowid, round(score, 4) FROM t WHERE t.terms MATCH '{\"heart\": 2.0, \"attack\": 1.0}'"));
+say((got === "[[1,5.5]]" ? "OK " : "FAIL ") + "terms INSERT + terms MATCH in wasm: " + got);
+window.__check = lines.slice();
+let db = null;
+document.getElementById("db").addEventListener("change", async (e) => {
+  const bytes = new Uint8Array(await e.target.files[0].arrayBuffer());
+  db = new sqlite3.oo1.DB();
+  const p = sqlite3.wasm.allocFromTypedArray(bytes);
+  db.checkRc(sqlite3.capi.sqlite3_deserialize(db.pointer, "main", p, bytes.byteLength, bytes.byteLength,
+    sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_READONLY));
+  db.exec("CREATE VIRTUAL TABLE temp.s USING sparse0()");
+  res.textContent = "loaded " + (bytes.byteLength / 1048576).toFixed(1) + " MB; " + db.selectValue("SELECT v FROM meta WHERE k='ndocs'") + " documents";
+});
+document.getElementById("run").addEventListener("click", () => {
+  if (!db) { res.textContent = "load a .db first"; return; }
+  const q = document.getElementById("q").value;
+  const t0 = performance.now();
+  const rows = db.selectArrays("SELECT rowid, round(score, 4) FROM s WHERE s MATCH ? AND k = 10", [q]);
+  res.textContent = `${(performance.now() - t0).toFixed(2)} ms\n` + JSON.stringify(rows) + "\ntokens: " + db.selectValue("SELECT sparse_tokens(?)", [q]);
+});
+</script>

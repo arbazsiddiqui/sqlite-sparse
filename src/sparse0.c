@@ -11,9 +11,29 @@ SQLITE_EXTENSION_INIT1
 
 #include "sha256.c"
 #include "wordpiece.c"
-#include "head.c"
 #include "scorer.c"
+#ifdef SPARSE0_QUERY_ONLY
+/* A build without llama.cpp and ggml (the WebAssembly build): everything that
+ * reads or writes an index works, but no model can be registered, so text
+ * INSERTs are refused. The stubs keep the rest of this file unchanged. */
+typedef struct { char *vocab_blob; float *qlut; uint32_t vocab_n; } SparseHead;
+typedef struct SparseEncoder SparseEncoder;
+static SparseHead *sparse_head_load(const char *path) { (void)path; return NULL; }
+static SparseEncoder *sparse_encoder_load(const char *gguf, int n_threads, int max_seq) {
+    (void)gguf; (void)n_threads; (void)max_seq; return NULL;
+}
+static void sparse_encoder_free(SparseEncoder *e) { (void)e; }
+static int sparse_encoder_encode(SparseEncoder *e, const char *text, float **hs, int *n_total) {
+    (void)e; (void)text; *hs = NULL; *n_total = 0; return -1;
+}
+static int sparse_head_apply(const SparseHead *h, const float *hs, int n_tokens, float wmin,
+                             int32_t *terms, float *weights, int cap) {
+    (void)h; (void)hs; (void)n_tokens; (void)wmin; (void)terms; (void)weights; (void)cap; return -1;
+}
+#else
+#include "head.c"
 #include "encoder.c"
+#endif
 
 #define MAX_QUERY_TERMS 512
 #define MAX_DOC_TERMS 4096
@@ -954,6 +974,12 @@ static sqlite3_module sparse0_module = {
 /* SQL functions */
 
 static void fn_sparse_register(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+#ifdef SPARSE0_QUERY_ONLY
+    (void)argc; (void)argv;
+    sqlite3_result_error(ctx, "sparse_register: this build has no encoder (query-only); "
+                              "index on a machine with the full extension or insert terms JSON", -1);
+    return;
+#endif
     const char *name = (const char *)sqlite3_value_text(argv[0]);
     const char *gguf = (const char *)sqlite3_value_text(argv[1]);
     const char *sprs = (const char *)sqlite3_value_text(argv[2]);
@@ -1084,7 +1110,11 @@ static void fn_sparse_tokens(sqlite3_context *ctx, int argc, sqlite3_value **arg
 
 static void fn_sparse_version(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     (void)argc; (void)argv;
+#ifdef SPARSE0_QUERY_ONLY
+    sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 1.1.0 query-only", -1, SQLITE_STATIC);
+#else
     sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 1.1.0", -1, SQLITE_STATIC);
+#endif
 }
 
 #ifdef _WIN32

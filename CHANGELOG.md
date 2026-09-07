@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `wasm/`: a query-only WebAssembly build, the official SQLite WASM bundle with `sparse0`
+  compiled in through `sqlite3_wasm_extra_init.c`. `SPARSE0_QUERY_ONLY` leaves out
+  llama.cpp and ggml; `sparse_register` and text `INSERT` are refused, everything else is
+  the same C code. `sparse_version()` reports `query-only` in that build.
+
 ## 1.1.0 (2026-09-07)
 
 Term vectors from the caller, so any sparse model works when you run it yourself. No
