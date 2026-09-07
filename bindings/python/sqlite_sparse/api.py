@@ -23,6 +23,20 @@ class SparseIndex:
     def create(cls, path, model="mini", **kw):
         return cls(path, model=model, **kw)
 
+    @classmethod
+    def create_external(cls, path, vocab):
+        """An index that takes term vectors from the caller: no model and no query
+        weight table. vocab is the list of token strings, index = term id."""
+        ix = cls.__new__(cls)
+        ix.store = SparseStore(path)
+        ix._enc, ix._model, ix._max_seq, ix._device = None, "external", 256, None
+        if not ix.store.get_meta("format"):
+            vocab = list(vocab)
+            assert len(set(vocab)) == len(vocab), "vocabulary has duplicate tokens"
+            ix.store.init_model("external", vocab, np.zeros(len(vocab)))
+        ix.engine = QueryEngine(ix.store.db)
+        return ix
+
     def encoder(self):
         if self._enc is None:
             from .encoder import TorchEncoder
@@ -50,6 +64,23 @@ class SparseIndex:
             total += len(rows)
         self.engine.reload()
         return total
+
+    def add_terms(self, id, terms, title=""):
+        """Store a document encoded by the caller, {token: weight}. Every token must
+        be in the index vocabulary; non-positive weights are dropped."""
+        v2i = self.engine._v2i
+        unknown = [t for t in terms if t not in v2i]
+        if unknown:
+            raise ValueError(f"terms not in the index vocabulary: {unknown[:5]}")
+        enc = {}
+        for tok, w in terms.items():
+            if w > 0:
+                enc[v2i[tok]] = enc.get(v2i[tok], 0.0) + float(w)
+        self.store.add_encoded([(id, title, None, enc)])
+        self.engine.reload()
+
+    def search_terms(self, terms, k=10):
+        return self.engine.search_terms(terms, k=k)
 
     def delete(self, id):
         self.store.delete(id)

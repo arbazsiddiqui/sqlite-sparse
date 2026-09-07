@@ -17,6 +17,9 @@ exact dot product over impact postings (no candidate stage, no recall loss).
   registered model's vocabulary hash and every query-table entry against the
   file and refuses with an error if they differ, since postings are only
   meaningful with the vocabulary and query table they were built with.
+  An index created from a vocabulary alone (no model) has model_id `external`, no
+  encoder/sidecar/vocab hashes, and an empty qlut; its documents and queries are
+  term vectors supplied by the caller.
 - qlut(t INTEGER PRIMARY KEY, w REAL)
   the model's static query weight table, nonzero entries only
 - postings(t INTEGER PRIMARY KEY, docs BLOB, ws BLOB)
@@ -47,6 +50,11 @@ exact dot product over impact postings (no candidate stage, no recall loss).
 3. For each t in qw, fetch the postings row and accumulate
    score[doc] += qw[t] * weight(ws[i]) (scatter-add / bincount).
 4. Top-k by score, ties broken by lower doc id. No approximations anywhere.
+
+A caller-supplied query vector {token: weight} replaces steps 1 and 2: each token is
+looked up in meta.vocab, unknown tokens are skipped, non-positive weights dropped and
+repeated tokens summed. Document vectors arrive the same way and are quantized as the
+encoder path quantizes: w_q = clamp(round(w * weight_scale), 1, 255) in u8 mode.
 
 ## Design notes
 - Blobs are raw little-endian typed arrays, so any language reads them

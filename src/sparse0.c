@@ -159,6 +159,7 @@ typedef struct {
     Vocab *vocab;
     float *qlut;             /* [vocab_n] */
     int vocab_n;
+    int qlut_nonzero;        /* 0 for an index created from a vocabulary alone */
     float weight_scale;
     int weight_mode_u8;
     int loaded;
@@ -264,9 +265,13 @@ static int tab_load_query_state(Sparse0Tab *t) {
     t->qlut = calloc(n, sizeof(float));
     sqlite3_stmt *st;
     if (sqlite3_prepare_v2(t->db, "SELECT t, w FROM qlut", -1, &st, NULL) != SQLITE_OK) return SQLITE_ERROR;
+    t->qlut_nonzero = 0;
     while (sqlite3_step(st) == SQLITE_ROW) {
         int term = sqlite3_column_int(st, 0);
-        if (term >= 0 && term < n) t->qlut[term] = (float)sqlite3_column_double(st, 1);
+        if (term >= 0 && term < n) {
+            t->qlut[term] = (float)sqlite3_column_double(st, 1);
+            if (t->qlut[term] != 0.0f) t->qlut_nonzero++;
+        }
     }
     sqlite3_finalize(st);
     t->loaded = 1;
@@ -347,38 +352,104 @@ static int sparse0_init_model_rows(sqlite3 *db, SparseModel *m) {
     return SQLITE_OK;
 }
 
+/* An index with no model: the vocabulary comes from a file with one token per
+ * line, the query weight table stays empty, and documents and queries arrive
+ * as term vectors through the terms column. */
+static int sparse0_init_external_rows(sqlite3 *db, const char *vocab_path, char **err) {
+    FILE *f = fopen(vocab_path, "rb");
+    if (!f) { *err = sqlite3_mprintf("sparse0: cannot open vocab file %s", vocab_path); return SQLITE_ERROR; }
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz <= 0 || sz > (256L << 20)) { fclose(f); *err = sqlite3_mprintf("sparse0: vocab file %s is empty or too large", vocab_path); return SQLITE_ERROR; }
+    char *raw = malloc((size_t)sz + 1);
+    if (!raw || fread(raw, 1, (size_t)sz, f) != (size_t)sz) { fclose(f); free(raw); *err = sqlite3_mprintf("sparse0: cannot read vocab file %s", vocab_path); return SQLITE_ERROR; }
+    fclose(f);
+    size_t w = 0;
+    for (long i = 0; i < sz; i++) if (raw[i] != '\r') raw[w++] = raw[i];
+    while (w && raw[w-1] == '\n') w--;
+    raw[w] = 0;
+    /* every token must be unique and non-empty, or ids would be ambiguous */
+    char *copy = malloc(w + 1);
+    memcpy(copy, raw, w + 1);
+    Vocab *v = vocab_from_blob(copy);
+    for (int i = 0; i < v->n; i++) {
+        const char *tok = v->entries[i].tok;
+        if (tok[0] == 0) { *err = sqlite3_mprintf("sparse0: vocab file line %d is empty", i + 1); vocab_free(v); free(raw); return SQLITE_ERROR; }
+        if (vocab_lookup(v, tok, strlen(tok)) != i) { *err = sqlite3_mprintf("sparse0: vocab token '%s' (line %d) is a duplicate or too long", tok, i + 1); vocab_free(v); free(raw); return SQLITE_ERROR; }
+    }
+    int n = v->n;
+    vocab_free(v);
+    if (n < 1) { *err = sqlite3_mprintf("sparse0: vocab file %s has no tokens", vocab_path); free(raw); return SQLITE_ERROR; }
+    char *json = blob_to_json_vocab(raw);
+    free(raw);
+    char *sql = sqlite3_mprintf(
+        "INSERT OR REPLACE INTO meta VALUES"
+        "('format','sqlite-sparse/1'),('model_id','external'),"
+        "('weight_mode','u8'),('weight_scale','40.0'),('ndocs','0'),"
+        "('vocab',%Q);", json);
+    int rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    free(json);
+    if (rc != SQLITE_OK) *err = sqlite3_mprintf("sparse0: init failed (%s)", sqlite3_errmsg(db));
+    return rc;
+}
+
+/* key=value from a CREATE VIRTUAL TABLE argument, quotes and spaces trimmed */
+static char *arg_value(const char *arg, const char *key) {
+    size_t kl = strlen(key);
+    if (strncmp(arg, key, kl) != 0) return NULL;
+    const char *eq = strchr(arg, '=');
+    if (!eq) return NULL;
+    eq++;
+    while (*eq == ' ' || *eq == '\'' || *eq == '"') eq++;
+    size_t len = strlen(eq);
+    while (len && (eq[len-1] == ' ' || eq[len-1] == '\'' || eq[len-1] == '"')) len--;
+    return sqlite3_mprintf("%.*s", (int)len, eq);
+}
+
 static int sparse0_connect_common(sqlite3 *db, void *aux, int argc,
                                   const char *const *argv, sqlite3_vtab **out,
                                   char **err, int create) {
     (void)aux;
-    const char *model = NULL;
+    char *model = NULL, *vocab_path = NULL;
     for (int i = 3; i < argc; i++) {
-        if (strncmp(argv[i], "model", 5) == 0) {
-            const char *eq = strchr(argv[i], '=');
-            if (eq) {
-                eq++;
-                while (*eq == ' ' || *eq == '\'' || *eq == '"') eq++;
-                size_t len = strlen(eq);
-                while (len && (eq[len-1] == ' ' || eq[len-1] == '\'' || eq[len-1] == '"')) len--;
-                model = sqlite3_mprintf("%.*s", (int)len, eq);
-            }
-        }
+        char *v;
+        if ((v = arg_value(argv[i], "model")) != NULL) { sqlite3_free(model); model = v; }
+        else if ((v = arg_value(argv[i], "vocab")) != NULL) { sqlite3_free(vocab_path); vocab_path = v; }
     }
-    if (create) {
+    if (model && vocab_path) {
+        sqlite3_free(model); sqlite3_free(vocab_path);
+        *err = sqlite3_mprintf("sparse0: give model= or vocab=, not both");
+        return SQLITE_ERROR;
+    }
+    {
         char *fmt = NULL;
         meta_get_text(db, "format", &fmt);
         int have_format = fmt && strcmp(fmt, "sqlite-sparse/1") == 0;
         sqlite3_free(fmt);
-        if (!have_format) {
-
-            if (!model) { *err = sqlite3_mprintf("sparse0: model='name' argument required for a new database"); return SQLITE_ERROR; }
-            SparseModel *m = model_find(model);
-            if (!m) { *err = sqlite3_mprintf("sparse0: model '%s' not registered (call sparse_register first)", model); return SQLITE_ERROR; }
-            int rc = sqlite3_exec(db, SCHEMA_SQL, NULL, NULL, NULL);
-            if (rc == SQLITE_OK) rc = sparse0_init_model_rows(db, m);
-            if (rc != SQLITE_OK) { *err = sqlite3_mprintf("sparse0: init failed (%s)", sqlite3_errmsg(db)); return rc; }
+        if (vocab_path && (have_format || !create)) {
+            sqlite3_free(model); sqlite3_free(vocab_path);
+            *err = sqlite3_mprintf("sparse0: vocab= only applies when creating a new database");
+            return SQLITE_ERROR;
         }
-
+        if (create && !have_format) {
+            int rc;
+            if (vocab_path) {
+                rc = sqlite3_exec(db, SCHEMA_SQL, NULL, NULL, NULL);
+                if (rc == SQLITE_OK) rc = sparse0_init_external_rows(db, vocab_path, err);
+                else *err = sqlite3_mprintf("sparse0: init failed (%s)", sqlite3_errmsg(db));
+                sqlite3_free(vocab_path);
+                if (rc != SQLITE_OK) return rc;
+            } else {
+                if (!model) { *err = sqlite3_mprintf("sparse0: model='name' or vocab='file' argument required for a new database"); return SQLITE_ERROR; }
+                SparseModel *m = model_find(model);
+                if (!m) { *err = sqlite3_mprintf("sparse0: model '%s' not registered (call sparse_register first)", model); sqlite3_free(model); return SQLITE_ERROR; }
+                rc = sqlite3_exec(db, SCHEMA_SQL, NULL, NULL, NULL);
+                if (rc == SQLITE_OK) rc = sparse0_init_model_rows(db, m);
+                if (rc != SQLITE_OK) { *err = sqlite3_mprintf("sparse0: init failed (%s)", sqlite3_errmsg(db)); sqlite3_free(model); return rc; }
+            }
+        }
     }
     {
         char *fmt = NULL;
@@ -387,14 +458,14 @@ static int sparse0_connect_common(sqlite3 *db, void *aux, int argc,
         sqlite3_free(fmt);
     }
     char *decl = sqlite3_mprintf(
-        "CREATE TABLE x(text TEXT, score REAL, k INTEGER HIDDEN, \"%w\" TEXT HIDDEN)", argv[2]);
+        "CREATE TABLE x(text TEXT, score REAL, k INTEGER HIDDEN, \"%w\" TEXT HIDDEN, terms TEXT HIDDEN)", argv[2]);
     int rc = sqlite3_declare_vtab(db, decl);
     sqlite3_free(decl);
-    if (rc != SQLITE_OK) return rc;
+    if (rc != SQLITE_OK) { sqlite3_free(model); return rc; }
     Sparse0Tab *t = sqlite3_malloc(sizeof(Sparse0Tab));
     memset(t, 0, sizeof(*t));
     t->db = db;
-    t->model_name = model ? sqlite3_mprintf("%s", model) : NULL;
+    t->model_name = model;
     *out = &t->base;
     return SQLITE_OK;
 }
@@ -419,15 +490,19 @@ static int sparse0_disconnect(sqlite3_vtab *vt) {
     return SQLITE_OK;
 }
 
-/* idxNum bits: 1 MATCH, 2 k, 4 rowid lookup, 8 LIMIT */
+/* idxNum bits: 1 MATCH, 2 k, 4 rowid lookup, 8 LIMIT, 16 the MATCH is a terms JSON */
 static int sparse0_bestindex(sqlite3_vtab *vt, sqlite3_index_info *ii) {
     (void)vt;
-    int i_match = -1, i_k = -1;
+    int i_match = -1, i_k = -1, match_terms = 0;
     for (int i = 0; i < ii->nConstraint; i++) {
         const struct sqlite3_index_constraint *c = &ii->aConstraint[i];
         if (!c->usable) continue;
-        if (c->op == SQLITE_INDEX_CONSTRAINT_MATCH && (c->iColumn == 0 || c->iColumn == 3))
-            i_match = i;
+        if (c->op == SQLITE_INDEX_CONSTRAINT_MATCH && (c->iColumn == 0 || c->iColumn == 3)) {
+            i_match = i; match_terms = 0;
+        }
+        if (c->op == SQLITE_INDEX_CONSTRAINT_MATCH && c->iColumn == 4) {
+            i_match = i; match_terms = 1;
+        }
         if (c->op == SQLITE_INDEX_CONSTRAINT_EQ && c->iColumn == 2)
             i_k = i;
     }
@@ -445,7 +520,7 @@ static int sparse0_bestindex(sqlite3_vtab *vt, sqlite3_index_info *ii) {
     if (i_match >= 0) {
         ii->aConstraintUsage[i_match].argvIndex = 1;
         ii->aConstraintUsage[i_match].omit = 1;
-        ii->idxNum = 1;
+        ii->idxNum = 1 | (match_terms ? 16 : 0);
         int next = 2;
         if (i_k >= 0) {
             ii->aConstraintUsage[i_k].argvIndex = next++;
@@ -478,6 +553,64 @@ static int sparse0_bestindex(sqlite3_vtab *vt, sqlite3_index_info *ii) {
         ii->estimatedRows = 100000;
     }
     return SQLITE_OK;
+}
+
+/* {"token": weight, ...} -> vocabulary ids with positive weights, repeats
+ * summed. Unknown tokens are an error when strict, skipped otherwise. Returns
+ * the term count, or -1 with *err set. */
+static int json_terms_parse(Sparse0Tab *t, const char *json, int32_t *terms, float *weights,
+                            int cap, int strict, char **err) {
+    sqlite3_stmt *st;
+    if (sqlite3_prepare_v2(t->db, "SELECT json_type(?)", -1, &st, NULL) != SQLITE_OK) {
+        *err = sqlite3_mprintf("sparse0: this SQLite has no JSON support");
+        return -1;
+    }
+    sqlite3_bind_text(st, 1, json, -1, SQLITE_STATIC);
+    int is_object = sqlite3_step(st) == SQLITE_ROW && sqlite3_column_type(st, 0) == SQLITE_TEXT
+                    && strcmp((const char *)sqlite3_column_text(st, 0), "object") == 0;
+    sqlite3_finalize(st);
+    if (!is_object) {
+        *err = sqlite3_mprintf("sparse0: terms must be a JSON object of {\"token\": weight}");
+        return -1;
+    }
+    if (sqlite3_prepare_v2(t->db, "SELECT key, value, type FROM json_each(?)", -1, &st, NULL) != SQLITE_OK) {
+        *err = sqlite3_mprintf("sparse0: this SQLite has no JSON support");
+        return -1;
+    }
+    sqlite3_bind_text(st, 1, json, -1, SQLITE_STATIC);
+    int n = 0;
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        const char *key = (const char *)sqlite3_column_text(st, 0);
+        const char *type = (const char *)sqlite3_column_text(st, 2);
+        if (!key || !type) continue;
+        if (strcmp(type, "integer") != 0 && strcmp(type, "real") != 0) {
+            *err = sqlite3_mprintf("sparse0: weight for '%s' must be a number", key);
+            sqlite3_finalize(st);
+            return -1;
+        }
+        double w = sqlite3_column_double(st, 1);
+        int32_t id = vocab_lookup(t->vocab, key, strlen(key));
+        if (id < 0) {
+            if (!strict) continue;
+            *err = sqlite3_mprintf("sparse0: term '%s' is not in the index vocabulary", key);
+            sqlite3_finalize(st);
+            return -1;
+        }
+        if (!(w > 0.0)) continue;
+        int found = -1;
+        for (int j = 0; j < n; j++) if (terms[j] == id) { found = j; break; }
+        if (found >= 0) { weights[found] += (float)w; continue; }
+        if (n == cap) {
+            *err = sqlite3_mprintf("sparse0: more than %d terms", cap);
+            sqlite3_finalize(st);
+            return -1;
+        }
+        terms[n] = id;
+        weights[n] = (float)w;
+        n++;
+    }
+    sqlite3_finalize(st);
+    return n;
 }
 
 static int sparse0_open(sqlite3_vtab *vt, sqlite3_vtab_cursor **out) {
@@ -543,21 +676,30 @@ static int sparse0_filter(sqlite3_vtab_cursor *cur, int idxNum, const char *idxS
     if (k <= 0) k = DEFAULT_K;
     if (!q) return SQLITE_OK;
 
-    int32_t ids[MAX_QUERY_TERMS];
-    int n_ids = wp_tokenize(t->vocab, q, ids, MAX_QUERY_TERMS);
-
     int32_t qterms[MAX_QUERY_TERMS];
     float qweights[MAX_QUERY_TERMS];
     int nq = 0;
-    for (int i = 0; i < n_ids; i++) {
-        int32_t term = ids[i];
-        if (term < 0 || term >= t->vocab_n) continue;
-        float w = t->qlut[term];
-        if (w == 0.0f) continue;
-        int found = -1;
-        for (int j = 0; j < nq; j++) if (qterms[j] == term) { found = j; break; }
-        if (found >= 0) qweights[found] += w;
-        else { qterms[nq] = term; qweights[nq] = w; nq++; }
+    if (idxNum & 16) {
+        char *err = NULL;
+        nq = json_terms_parse(t, q, qterms, qweights, MAX_QUERY_TERMS, 0, &err);
+        if (nq < 0) { t->base.zErrMsg = err; return SQLITE_ERROR; }
+    } else {
+        if (t->qlut_nonzero == 0) {
+            t->base.zErrMsg = sqlite3_mprintf("sparse0: this index has no query weight table (created with vocab=); query with terms MATCH");
+            return SQLITE_ERROR;
+        }
+        int32_t ids[MAX_QUERY_TERMS];
+        int n_ids = wp_tokenize(t->vocab, q, ids, MAX_QUERY_TERMS);
+        for (int i = 0; i < n_ids; i++) {
+            int32_t term = ids[i];
+            if (term < 0 || term >= t->vocab_n) continue;
+            float w = t->qlut[term];
+            if (w == 0.0f) continue;
+            int found = -1;
+            for (int j = 0; j < nq; j++) if (qterms[j] == term) { found = j; break; }
+            if (found >= 0) qweights[found] += w;
+            else { qterms[nq] = term; qweights[nq] = w; nq++; }
+        }
     }
     if (!nq) return SQLITE_OK;
 
@@ -604,12 +746,123 @@ static int sparse0_rowid(sqlite3_vtab_cursor *cur, sqlite3_int64 *out) {
 
 /* write path */
 
+/* Writes the docs row and merges (term, weight) pairs into the posting lists.
+ * ntokens and truncated are recorded when have_tok, else left NULL. Weights are
+ * quantized to one byte at the file's scale, clamped to [1,255], or stored as
+ * little-endian f32 when the file says so. */
+static int store_terms(Sparse0Tab *t, sqlite3_int64 rowid_in, const int32_t *terms,
+                       const float *weights, int n_terms, int have_tok, int n_total,
+                       int truncated, sqlite3_int64 *rowid_out) {
+    sqlite3 *db = t->db;
+    sqlite3_stmt *st;
+    sqlite3_int64 did;
+    if (rowid_in > 0) {
+        sqlite3_prepare_v2(db, "INSERT INTO docs(id, ext_id, ntokens, truncated) VALUES(?, ?, ?, ?)", -1, &st, NULL);
+        sqlite3_bind_int64(st, 1, rowid_in);
+        char idbuf[32];
+        snprintf(idbuf, sizeof(idbuf), "%lld", (long long)rowid_in);
+        sqlite3_bind_text(st, 2, idbuf, -1, SQLITE_TRANSIENT);
+        if (have_tok) { sqlite3_bind_int(st, 3, n_total); sqlite3_bind_int(st, 4, truncated); }
+        else { sqlite3_bind_null(st, 3); sqlite3_bind_null(st, 4); }
+        int rc = sqlite3_step(st);
+        sqlite3_finalize(st);
+        if (rc != SQLITE_DONE) {
+            t->base.zErrMsg = sqlite3_mprintf("sparse0: rowid insert failed (%s)", sqlite3_errmsg(db));
+            return SQLITE_ERROR;
+        }
+        did = rowid_in;
+    } else {
+        sqlite3_prepare_v2(db, "INSERT INTO docs(ext_id, ntokens, truncated) VALUES(NULL, ?, ?)", -1, &st, NULL);
+        if (have_tok) { sqlite3_bind_int(st, 1, n_total); sqlite3_bind_int(st, 2, truncated); }
+        else { sqlite3_bind_null(st, 1); sqlite3_bind_null(st, 2); }
+        sqlite3_step(st);
+        sqlite3_finalize(st);
+        did = sqlite3_last_insert_rowid(db);
+        sqlite3_stmt *fix;
+        sqlite3_prepare_v2(db, "UPDATE docs SET ext_id=? WHERE id=?", -1, &fix, NULL);
+        char idbuf[32];
+        snprintf(idbuf, sizeof(idbuf), "%lld", (long long)did);
+        sqlite3_bind_text(fix, 1, idbuf, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(fix, 2, did);
+        sqlite3_step(fix);
+        sqlite3_finalize(fix);
+    }
+
+    int u8 = t->weight_mode_u8;
+    int wsz = u8 ? 1 : 4;
+    float scale = t->weight_scale;
+    sqlite3_stmt *sel, *ins;
+    sqlite3_prepare_v2(db, "SELECT docs, ws FROM postings WHERE t=?", -1, &sel, NULL);
+    sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO postings VALUES(?,?,?)", -1, &ins, NULL);
+    for (int i = 0; i < n_terms; i++) {
+        int32_t term = terms[i];
+        sqlite3_bind_int(sel, 1, term);
+        const void *odocs = NULL, *ows = NULL;
+        int on = 0;
+        if (sqlite3_step(sel) == SQLITE_ROW) {
+            on = sqlite3_column_bytes(sel, 0) / 4;
+            odocs = sqlite3_column_blob(sel, 0);
+            ows = sqlite3_column_blob(sel, 1);
+        }
+        int32_t *nd = malloc((on + 1) * 4);
+        uint8_t *nw = malloc((on + 1) * wsz);
+        if (on) { memcpy(nd, odocs, on * 4); memcpy(nw, ows, on * wsz); }
+        nd[on] = (int32_t)did;
+        if (u8) {
+            float w = weights[i] * scale;
+            nw[on] = w < 1.0f ? 1 : w > 255.0f ? 255 : (uint8_t)lrintf(w);
+        } else {
+            float w = weights[i];
+            memcpy(nw + on * 4, &w, 4);   /* little-endian hosts only, as the format is */
+        }
+        sqlite3_reset(sel);
+        sqlite3_bind_int(ins, 1, term);
+        sqlite3_bind_blob(ins, 2, nd, (on + 1) * 4, free);
+        sqlite3_bind_blob(ins, 3, nw, (on + 1) * wsz, free);
+        sqlite3_step(ins);
+        sqlite3_reset(ins);
+    }
+    sqlite3_finalize(sel);
+    sqlite3_finalize(ins);
+
+    sqlite3_exec(db,
+        "INSERT OR REPLACE INTO meta VALUES('ndocs',"
+        "(SELECT COALESCE(MAX(id),0) FROM docs))", NULL, NULL, NULL);
+    *rowid_out = did;
+    t->data_version = -1;
+    return SQLITE_OK;
+}
+
+static int sparse0_insert_terms(Sparse0Tab *t, sqlite3_int64 rowid_in,
+                                const char *json, sqlite3_int64 *rowid_out) {
+    if (tab_load_query_state(t) != SQLITE_OK) {
+        t->base.zErrMsg = sqlite3_mprintf("sparse0: not a sqlite-sparse/1 database");
+        return SQLITE_ERROR;
+    }
+    int32_t terms[MAX_DOC_TERMS];
+    float weights[MAX_DOC_TERMS];
+    char *err = NULL;
+    int n = json_terms_parse(t, json, terms, weights, MAX_DOC_TERMS, 1, &err);
+    if (n < 0) { t->base.zErrMsg = err; return SQLITE_ERROR; }
+    return store_terms(t, rowid_in, terms, weights, n, 0, 0, 0, rowid_out);
+}
+
 static int sparse0_insert_doc(Sparse0Tab *t, sqlite3_int64 rowid_in,
                               const char *text, sqlite3_int64 *rowid_out) {
     SparseModel *m = t->model_name ? model_find(t->model_name) : NULL;
     if (!m) {
-        t->base.zErrMsg = sqlite3_mprintf("sparse0: model '%s' not registered in this process",
-                                          t->model_name ? t->model_name : "(none)");
+        char *mid = NULL;
+        meta_get_text(t->db, "model_id", &mid);
+        if (mid && strcmp(mid, "external") == 0)
+            t->base.zErrMsg = sqlite3_mprintf("sparse0: this index has no model (created with vocab=); insert a terms JSON instead");
+        else
+            t->base.zErrMsg = sqlite3_mprintf("sparse0: model '%s' not registered in this process",
+                                              t->model_name ? t->model_name : "(none)");
+        sqlite3_free(mid);
+        return SQLITE_ERROR;
+    }
+    if (tab_load_query_state(t) != SQLITE_OK) {
+        t->base.zErrMsg = sqlite3_mprintf("sparse0: not a sqlite-sparse/1 database");
         return SQLITE_ERROR;
     }
     if (!m->enc) {
@@ -644,80 +897,7 @@ static int sparse0_insert_doc(Sparse0Tab *t, sqlite3_int64 rowid_in,
         t->base.zErrMsg = sqlite3_mprintf("sparse0: head failed");
         return SQLITE_ERROR;
     }
-
-    sqlite3 *db = t->db;
-    sqlite3_stmt *st;
-    sqlite3_int64 did;
-    int truncated = n_total > n_tok;
-    if (rowid_in > 0) {
-        sqlite3_prepare_v2(db, "INSERT INTO docs(id, ext_id, ntokens, truncated) VALUES(?, ?, ?, ?)", -1, &st, NULL);
-        sqlite3_bind_int64(st, 1, rowid_in);
-        char idbuf[32];
-        snprintf(idbuf, sizeof(idbuf), "%lld", (long long)rowid_in);
-        sqlite3_bind_text(st, 2, idbuf, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(st, 3, n_total);
-        sqlite3_bind_int(st, 4, truncated);
-        int rc = sqlite3_step(st);
-        sqlite3_finalize(st);
-        if (rc != SQLITE_DONE) {
-            t->base.zErrMsg = sqlite3_mprintf("sparse0: rowid insert failed (%s)", sqlite3_errmsg(db));
-            return SQLITE_ERROR;
-        }
-        did = rowid_in;
-    } else {
-        sqlite3_prepare_v2(db, "INSERT INTO docs(ext_id, ntokens, truncated) VALUES(NULL, ?, ?)", -1, &st, NULL);
-        sqlite3_bind_int(st, 1, n_total);
-        sqlite3_bind_int(st, 2, truncated);
-        sqlite3_step(st);
-        sqlite3_finalize(st);
-        did = sqlite3_last_insert_rowid(db);
-        sqlite3_stmt *fix;
-        sqlite3_prepare_v2(db, "UPDATE docs SET ext_id=? WHERE id=?", -1, &fix, NULL);
-        char idbuf[32];
-        snprintf(idbuf, sizeof(idbuf), "%lld", (long long)did);
-        sqlite3_bind_text(fix, 1, idbuf, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(fix, 2, did);
-        sqlite3_step(fix);
-        sqlite3_finalize(fix);
-    }
-
-    /* weights quantized to u8 at scale 40, clamped to [1,255] */
-    sqlite3_stmt *sel, *ins;
-    sqlite3_prepare_v2(db, "SELECT docs, ws FROM postings WHERE t=?", -1, &sel, NULL);
-    sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO postings VALUES(?,?,?)", -1, &ins, NULL);
-    for (int i = 0; i < n_terms; i++) {
-        int32_t term = terms[i];
-        float w = weights[i] * WEIGHT_SCALE_DEFAULT;
-        uint8_t wq = w < 1.0f ? 1 : w > 255.0f ? 255 : (uint8_t)lrintf(w);
-        sqlite3_bind_int(sel, 1, term);
-        const void *odocs = NULL, *ows = NULL;
-        int on = 0;
-        if (sqlite3_step(sel) == SQLITE_ROW) {
-            on = sqlite3_column_bytes(sel, 0) / 4;
-            odocs = sqlite3_column_blob(sel, 0);
-            ows = sqlite3_column_blob(sel, 1);
-        }
-        int32_t *nd = malloc((on + 1) * 4);
-        uint8_t *nw = malloc(on + 1);
-        if (on) { memcpy(nd, odocs, on * 4); memcpy(nw, ows, on); }
-        nd[on] = (int32_t)did;
-        nw[on] = wq;
-        sqlite3_reset(sel);
-        sqlite3_bind_int(ins, 1, term);
-        sqlite3_bind_blob(ins, 2, nd, (on + 1) * 4, free);
-        sqlite3_bind_blob(ins, 3, nw, on + 1, free);
-        sqlite3_step(ins);
-        sqlite3_reset(ins);
-    }
-    sqlite3_finalize(sel);
-    sqlite3_finalize(ins);
-
-    sqlite3_exec(db,
-        "INSERT OR REPLACE INTO meta VALUES('ndocs',"
-        "(SELECT COALESCE(MAX(id),0) FROM docs))", NULL, NULL, NULL);
-    *rowid_out = did;
-    t->data_version = -1;
-    return SQLITE_OK;
+    return store_terms(t, rowid_in, terms, weights, n_terms, 1, n_total, n_total > n_tok, rowid_out);
 }
 
 static int sparse0_update(sqlite3_vtab *vt, int argc, sqlite3_value **argv,
@@ -736,13 +916,21 @@ static int sparse0_update(sqlite3_vtab *vt, int argc, sqlite3_value **argv,
         t->base.zErrMsg = sqlite3_mprintf("sparse0: UPDATE not supported; DELETE then INSERT");
         return SQLITE_ERROR;
     }
-    const char *text = (const char *)sqlite3_value_text(argv[2]);
-    if (!text) {
-        t->base.zErrMsg = sqlite3_mprintf("sparse0: text is required");
+    const char *text = sqlite3_value_type(argv[2]) == SQLITE_NULL
+                       ? NULL : (const char *)sqlite3_value_text(argv[2]);
+    const char *terms = (argc > 6 && sqlite3_value_type(argv[6]) != SQLITE_NULL)
+                        ? (const char *)sqlite3_value_text(argv[6]) : NULL;
+    if (text && terms) {
+        t->base.zErrMsg = sqlite3_mprintf("sparse0: give text or terms, not both");
+        return SQLITE_ERROR;
+    }
+    if (!text && !terms) {
+        t->base.zErrMsg = sqlite3_mprintf("sparse0: text or terms is required");
         return SQLITE_ERROR;
     }
     sqlite3_int64 rowid_in = sqlite3_value_type(argv[1]) == SQLITE_NULL
                              ? 0 : sqlite3_value_int64(argv[1]);
+    if (terms) return sparse0_insert_terms(t, rowid_in, terms, rowid_out);
     return sparse0_insert_doc(t, rowid_in, text, rowid_out);
 }
 
@@ -896,7 +1084,7 @@ static void fn_sparse_tokens(sqlite3_context *ctx, int argc, sqlite3_value **arg
 
 static void fn_sparse_version(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     (void)argc; (void)argv;
-    sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 1.0.0", -1, SQLITE_STATIC);
+    sqlite3_result_text(ctx, "sqlite-sparse/1 sparse0 1.1.0", -1, SQLITE_STATIC);
 }
 
 #ifdef _WIN32

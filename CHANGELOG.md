@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0 (2026-09-07)
+
+Term vectors from the caller, so any sparse model works when you run it yourself. No
+change to the file format.
+
+- `terms` hidden column on `sparse0`: `INSERT INTO t(rowid, terms) VALUES (?, '{"token":
+  weight}')` stores a document encoded outside the extension, and `t.terms MATCH
+  '{"token": weight}'` scores a query vector with the same scatter-add. Works on indexes
+  built by the shipped models too.
+- `CREATE VIRTUAL TABLE t USING sparse0(vocab='vocab.txt')` creates an index from a
+  vocabulary alone: no model, empty query weight table, `model_id` `external`.
+- Python: `SparseIndex.create_external`, `add_terms`, `search_terms`.
+- A text `MATCH` on an index without a query weight table is an error instead of an empty
+  result, and a text `INSERT` on it says to use `terms`.
+
 ## 1.0.0 (2026-09-05)
 
 First release. The file format `sqlite-sparse/1` and the `.sprs` sidecar header are

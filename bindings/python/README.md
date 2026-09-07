@@ -65,7 +65,7 @@ Or take the binary from the [releases page](https://github.com/arbazsiddiqui/sql
 and use it from any language.
 
 ```
-tar xzf sparse0-1.0.0-loadable-linux-x86_64.tar.gz    # or -macos-arm64
+tar xzf sparse0-1.1.0-loadable-linux-x86_64.tar.gz    # or -macos-arm64
 sqlite3 notes.db
 sqlite> .load ./sparse0
 ```
@@ -212,6 +212,26 @@ CREATE VIRTUAL TABLE notes USING sparse0(model='mine');
 The checkpoint must be a BERT-family encoder with a masked-LM head and a static query
 weight table, and llama.cpp must support the architecture (it does not support GTE,
 `doc-v3-gte`).
+
+### Bring your own vectors
+
+Any sparse model works if you run it yourself, including SPLADE models that encode the
+query too, and models llama.cpp cannot run. Create the index from the model's vocabulary
+and hand it `{"token": weight}` objects for documents and for queries. Nothing is
+converted; the extension stores and scores, and the file is the same format.
+
+```sql
+CREATE VIRTUAL TABLE notes USING sparse0(vocab='vocab.txt');    -- one token per line, no model
+INSERT INTO notes(rowid, terms) VALUES (1, '{"heart": 0.95, "cardiac": 0.42, "stroke": 0.92}');
+SELECT rowid, score FROM notes WHERE notes.terms MATCH '{"cardiac": 6.53, "arrest": 6.87}' LIMIT 5;
+```
+
+Tokens must be in the vocabulary (an unknown token is an error on insert and ignored in a
+query), weights must be positive, and weights above 6.375 saturate the one-byte storage.
+`terms MATCH` also works on an index one of the shipped models built, so a query encoded
+by your own model can search it. Text queries on a vocabulary-only index are an error,
+since there is no query weight table. In Python: `SparseIndex.create_external(path,
+vocab)`, `add_terms(id, terms)`, `search_terms(terms)`.
 
 ## Development
 

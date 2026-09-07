@@ -106,8 +106,27 @@ class QueryEngine:
                 qw[t] = qw.get(t, 0.0) + w
         return qw
 
+    def encode_terms(self, terms):
+        """{token: weight} -> {term id: weight}. Unknown tokens and non-positive
+        weights are dropped, repeated tokens summed."""
+        qw = {}
+        for tok, w in terms.items():
+            t = self._v2i.get(tok)
+            if t is None or not w > 0:
+                continue
+            qw[t] = qw.get(t, 0.0) + float(w)
+        return qw
+
     def search(self, text, k=10):
-        qw = self.encode_query(text)
+        if not self._qlut:
+            raise ValueError("this index has no query weight table (built from a vocabulary alone); "
+                             "use search_terms with a {token: weight} query")
+        return self._search_ids(self.encode_query(text), k)
+
+    def search_terms(self, terms, k=10):
+        return self._search_ids(self.encode_terms(terms), k)
+
+    def _search_ids(self, qw, k):
         if not qw or not self.ndocs:
             return []
         score = np.zeros(self.ndocs + 1, dtype=np.float64)
