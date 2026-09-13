@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `bindings/node`: the `sqlite-sparse` npm package. `getLoadablePath()` and `load(db)` for
+  `node:sqlite`, better-sqlite3 and node-sqlite3, with the release binaries for Linux x86-64
+  and macOS arm64 inside.
 - `wasm/`: a query-only WebAssembly build, the official SQLite WASM bundle with `sparse0`
   compiled in through `sqlite3_wasm_extra_init.c`. `SPARSE0_QUERY_ONLY` leaves out
   llama.cpp and ggml; `sparse_register` and text `INSERT` are refused, everything else is

@@ -1,0 +1,28 @@
+{
+  "name": "sqlite-sparse",
+  "version": "1.1.0",
+  "description": "Semantic search in one SQLite file. No model, no server at query time.",
+  "license": "MIT",
+  "author": "Arbaz Siddiqui <arbaz00@gmail.com>",
+  "homepage": "https://github.com/arbazsiddiqui/sqlite-sparse",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arbazsiddiqui/sqlite-sparse.git",
+    "directory": "bindings/node"
+  },
+  "bugs": "https://github.com/arbazsiddiqui/sqlite-sparse/issues",
+  "keywords": ["sqlite", "sqlite-extension", "search", "semantic-search", "sparse", "retrieval", "splade", "embedded"],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "index.d.ts", "lib/", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "fetch": "sh fetch-binaries.sh",
+    "prepack": "sh fetch-binaries.sh",
+    "test": "node test.js"
+  }
+}

@@ -59,10 +59,12 @@ Vespa.
 
 ```
 pip install sqlite-sparse
+npm install sqlite-sparse
 ```
 
-Or take the binary from the [releases page](https://github.com/arbazsiddiqui/sqlite-sparse/releases)
-and use it from any language.
+The npm package carries the same binaries for Node; `require("sqlite-sparse").load(db)` works
+with `node:sqlite` and better-sqlite3 ([bindings/node](bindings/node/)). Or take the binary from
+the [releases page](https://github.com/arbazsiddiqui/sqlite-sparse/releases) and use it from any language.
 
 ```
 tar xzf sparse0-1.1.0-loadable-linux-x86_64.tar.gz    # or -macos-arm64
@@ -96,6 +98,15 @@ db = sqlite3.connect("notes.db")
 sqlite_sparse.load(db)
 db.execute("CREATE VIRTUAL TABLE temp.notes USING sparse0()")     # adopts the index in the file
 db.execute("SELECT rowid, score FROM temp.notes WHERE notes MATCH 'heart medication' LIMIT 5")
+```
+
+```js
+// Or from Node, reading the same file.
+const { DatabaseSync } = require("node:sqlite");
+const db = new DatabaseSync("notes.db", { allowExtension: true });
+require("sqlite-sparse").load(db);
+db.exec("CREATE VIRTUAL TABLE temp.notes USING sparse0()");
+db.prepare("SELECT rowid, score FROM notes WHERE notes MATCH ? LIMIT 5").all("heart medication");
 ```
 
 ```sql

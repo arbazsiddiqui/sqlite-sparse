@@ -9,3 +9,6 @@ dist/
 *.sqlite
 .DS_Store
 bindings/python/sqlite_sparse/sparse0.*
+bindings/node/lib/
+bindings/node/node_modules/
+*.tgz
